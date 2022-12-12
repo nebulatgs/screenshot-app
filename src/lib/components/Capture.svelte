@@ -60,8 +60,6 @@
 	on:click={(e) => {
 		const width = x - startX;
 		const height = y - startY;
-		const screenW = e.screenX - globalStartX;
-		const screenH = e.screenY - globalStartY;
 		const ctx = canvasEl.getContext("2d");
 		if (ctx) {
 			ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
@@ -69,10 +67,10 @@
 			ctx.strokeRect(startX - 2, startY - 2, width + 4, height + 4);
 		}
 		invoke("capture", {
-			x: globalStartX,
-			y: globalStartY,
-			w: screenW,
-			h: screenH,
+			x1: globalStartX,
+			y1: globalStartY,
+			x2: e.screenX,
+			y2: e.screenY,
 		});
 	}}
 />

@@ -5,6 +5,7 @@
 
 use std::{io::Write, process::Child, sync::Mutex};
 
+use anyhow::Context;
 use tauri::{
     GlobalShortcutManager, Manager, PhysicalPosition, Position, State, SystemTray, SystemTrayEvent,
     SystemTrayMenu,
@@ -18,17 +19,20 @@ struct Storage {
 }
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn capture(x: u32, y: u32, w: u32, h: u32, storage: State<Storage>, app: tauri::AppHandle) {
-    dbg!(x, y, w, h);
-    app.get_window("capture")
+fn capture(x1: u32, y1: u32, x2: u32, y2: u32, storage: State<Storage>, app: tauri::AppHandle) {
+    let window = app.get_window("capture").unwrap();
+    window.set_ignore_cursor_events(true).unwrap();
+    let scale = window
+        .current_monitor()
         .unwrap()
-        .set_ignore_cursor_events(true)
-        .unwrap();
-    storage
-        .ffmpeg_child
-        .lock()
+        .context("failed to get current monitor")
         .unwrap()
-        .replace(capture::capture(x, y, w, h).unwrap());
+        .scale_factor();
+    let w = (x2 as f64 * scale) as u32 - (x1 as f64 * scale) as u32;
+    let h = (y2 as f64 * scale) as u32 - (y1 as f64 * scale) as u32;
+    storage.ffmpeg_child.lock().unwrap().replace(
+        capture::capture((x1 as f64 * scale) as u32, (y1 as f64 * scale) as u32, w, h).unwrap(),
+    );
 }
 
 // async fn minimize(app_handle: tauri::AppHandle) {
