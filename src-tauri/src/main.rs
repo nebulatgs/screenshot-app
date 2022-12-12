@@ -7,7 +7,7 @@ use std::{io::Write, process::Child, sync::Mutex};
 
 use anyhow::Context;
 use tauri::{
-    GlobalShortcutManager, Manager, PhysicalPosition, Position, State, SystemTray, SystemTrayEvent,
+    CustomMenuItem, GlobalShortcutManager, Manager, State, SystemTray, SystemTrayEvent,
     SystemTrayMenu,
 };
 use tempdir::TempDir;
@@ -17,7 +17,7 @@ mod capture;
 struct Storage {
     ffmpeg_child: Mutex<Option<(Child, TempDir)>>,
 }
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
+
 #[tauri::command]
 fn capture(x1: u32, y1: u32, x2: u32, y2: u32, storage: State<Storage>, app: tauri::AppHandle) {
     let window = app.get_window("capture").unwrap();
@@ -41,30 +41,16 @@ fn close_capture(app: tauri::AppHandle) {
         window.close().unwrap();
     }
 }
-
-// async fn minimize(app_handle: tauri::AppHandle) {
-//     use tauri::GlobalShortcutManager;
-//     app_handle
-//         .global_shortcut_manager()
-//         .register("CTRL + U", move || {});
-// }
-
 fn main() {
-    let tray_menu = SystemTrayMenu::new(); // insert the menu items here
+    let tray_menu = SystemTrayMenu::new().add_item(CustomMenuItem::new("quit", "Quit App")); // insert the menu items here
 
     tauri::Builder::default()
         .setup(|app| {
-            // let main_window = app.get_window("main").unwrap();
-            // main_window.set_always_on_top(true).unwrap();
-            // main_window.set_decorations(false).unwrap();
-            // main_window
-            //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
-            //     .unwrap();
             {
                 let handle = app.handle();
                 app.global_shortcut_manager()
                     .register("ALT + SHIFT + V", move || {
-                        let capture_window = tauri::WindowBuilder::new(
+                        tauri::WindowBuilder::new(
                             &handle,
                             "capture",
                             tauri::WindowUrl::App("/capture".into()),
@@ -78,10 +64,6 @@ fn main() {
                         .resizable(false)
                         .build()
                         .unwrap();
-                        // capture_window
-                        //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
-                        //     .unwrap();
-                        // capture::capture().unwrap();
                     })
                     .unwrap();
             }
@@ -98,6 +80,22 @@ fn main() {
                         {
                             child.stdin.take().unwrap().write_all(b"q").unwrap();
                             handle.get_window("capture").unwrap().close().unwrap();
+                            child.wait().unwrap();
+                            use chrono::Utc;
+                            let now = Utc::now();
+                            let filename = format!("qc_{}.mp4", now.format("%d-%m-%Y_%H-%M-%S"));
+                            _ = std::fs::create_dir(
+                                dirs::video_dir().unwrap().join("Quick Captures"),
+                            );
+                            std::fs::copy(
+                                temp_dir.path().join("record.mp4"),
+                                dirs::video_dir()
+                                    .unwrap()
+                                    .join("Quick Captures")
+                                    .join(filename),
+                            )
+                            .unwrap();
+                            temp_dir.close().unwrap();
                         }
                         // capture_window
                         //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
@@ -110,7 +108,7 @@ fn main() {
             Ok(())
         })
         .system_tray(SystemTray::new().with_menu(tray_menu))
-        .on_system_tray_event(|app, event| match event {
+        .on_system_tray_event(|_, event| match event {
             SystemTrayEvent::LeftClick {
                 position: _,
                 size: _,
@@ -135,10 +133,6 @@ fn main() {
             SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
                 "quit" => {
                     std::process::exit(0);
-                }
-                "hide" => {
-                    let window = app.get_window("main").unwrap();
-                    window.hide().unwrap();
                 }
                 _ => {}
             },

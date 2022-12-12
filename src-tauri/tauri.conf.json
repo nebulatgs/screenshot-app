@@ -70,6 +70,8 @@
 				"height": 600,
 				"resizable": true,
 				"title": "Screenshot",
+				"skipTaskbar": true,
+				"visible": false,
 				"width": 800
 			}
 		]

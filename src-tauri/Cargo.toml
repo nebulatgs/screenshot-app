@@ -19,6 +19,8 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.2", features = ["global-shortcut-all", "shell-open", "system-tray"] }
 tempdir = "0.3.7"
 anyhow = "1.0.66"
+dirs = "4.0.0"
+chrono = "0.4.23"
 
 [features]
 # by default Tauri runs in production mode

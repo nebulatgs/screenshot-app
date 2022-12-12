@@ -63,7 +63,7 @@
 		down = false;
 	}}
 	on:click={(e) => {
-		if (width >= 256 && height >= 256) {
+		if (width >= 150 && height >= 150) {
 			const ctx = canvasEl.getContext("2d");
 			if (ctx) {
 				ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
