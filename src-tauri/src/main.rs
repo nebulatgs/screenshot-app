@@ -35,6 +35,13 @@ fn capture(x1: u32, y1: u32, x2: u32, y2: u32, storage: State<Storage>, app: tau
     );
 }
 
+#[tauri::command]
+fn close_capture(app: tauri::AppHandle) {
+    if let Some(window) = app.get_window("capture") {
+        window.close().unwrap();
+    }
+}
+
 // async fn minimize(app_handle: tauri::AppHandle) {
 //     use tauri::GlobalShortcutManager;
 //     app_handle
@@ -140,7 +147,7 @@ fn main() {
         .manage(Storage {
             ffmpeg_child: Default::default(),
         })
-        .invoke_handler(tauri::generate_handler![capture])
+        .invoke_handler(tauri::generate_handler![capture, close_capture])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| match event {

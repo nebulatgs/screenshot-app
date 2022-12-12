@@ -7,6 +7,8 @@
 	let down = false;
 	let startX = 0;
 	let startY = 0;
+	$: width = x - startX;
+	$: height = y - startY;
 	let globalStartX = 0;
 	let globalStartY = 0;
 	let x = 0;
@@ -26,6 +28,11 @@
 </script>
 
 <svelte:window
+	on:keydown={(e) => {
+		if (e.key === "Escape") {
+			invoke("close_capture");
+		}
+	}}
 	on:mousedown={(e) => {
 		down = true;
 		const ctx = canvasEl.getContext("2d");
@@ -44,8 +51,6 @@
 		if (down) {
 			x = e.offsetX;
 			y = e.offsetY;
-			const width = x - startX;
-			const height = y - startY;
 			const ctx = canvasEl.getContext("2d");
 			if (ctx) {
 				ctx.fillStyle = "rgba(0, 0, 0, 1)";
@@ -58,20 +63,26 @@
 		down = false;
 	}}
 	on:click={(e) => {
-		const width = x - startX;
-		const height = y - startY;
-		const ctx = canvasEl.getContext("2d");
-		if (ctx) {
-			ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-			ctx.strokeStyle = "rgba(255, 255, 255, 1)";
-			ctx.strokeRect(startX - 2, startY - 2, width + 4, height + 4);
+		if (width >= 256 && height >= 256) {
+			const ctx = canvasEl.getContext("2d");
+			if (ctx) {
+				ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+				ctx.strokeStyle = "rgba(255, 255, 255, 1)";
+				ctx.strokeRect(startX - 2, startY - 2, width + 4, height + 4);
+			}
+			invoke("capture", {
+				x1: globalStartX,
+				y1: globalStartY,
+				x2: e.screenX,
+				y2: e.screenY,
+			});
+		} else {
+			const ctx = canvasEl.getContext("2d");
+			if (ctx) {
+				ctx.fillStyle = "rgba(0, 0, 0, 1)";
+				ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+			}
 		}
-		invoke("capture", {
-			x1: globalStartX,
-			y1: globalStartY,
-			x2: e.screenX,
-			y2: e.screenY,
-		});
 	}}
 />
 
