@@ -16,35 +16,9 @@ tauri-build = { version = "1.2", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.2", features = ["shell-open"] }
-
-
-[dependencies.windows]
-version = "0.38.0"
-features = [
-    "alloc",
-    "Foundation",
-    "Win32_Foundation",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Console",
-    "Win32_Graphics_Dwm",
-    "Win32_Graphics_Gdi",
-    "Win32_Graphics_Dxgi",
-    "Win32_Graphics_Dxgi_Common",
-    "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D11",
-    "Win32_System_WinRT",
-    "Win32_System_WinRT_Direct3D11",
-    "Win32_System_WinRT_Graphics_Capture",
-    "UI",
-    "Storage",
-    "Storage_Streams",
-    "Graphics",
-    "Graphics_Capture",
-    "Graphics_DirectX",
-    "Graphics_DirectX_Direct3D11",
-    "Graphics_Imaging",
-]
+tauri = { version = "1.2", features = ["global-shortcut-all", "shell-open", "system-tray"] }
+tempdir = "0.3.7"
+anyhow = "1.0.66"
 
 [features]
 # by default Tauri runs in production mode

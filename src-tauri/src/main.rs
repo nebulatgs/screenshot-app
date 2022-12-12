@@ -3,19 +3,146 @@
     windows_subsystem = "windows"
 )]
 
+use std::{io::Write, process::Child, sync::Mutex};
+
+use tauri::{
+    GlobalShortcutManager, Manager, PhysicalPosition, Position, State, SystemTray, SystemTrayEvent,
+    SystemTrayMenu,
+};
+use tempdir::TempDir;
+
 mod capture;
 
-mod d3d;
-
+struct Storage {
+    ffmpeg_child: Mutex<Option<(Child, TempDir)>>,
+}
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn greet(name: &str) -> String {
-    capture::capture();
-    format!("Hello, {}! You've been greeted from Rust!", name)
+fn capture(x: u32, y: u32, w: u32, h: u32, storage: State<Storage>, app: tauri::AppHandle) {
+    dbg!(x, y, w, h);
+    app.get_window("capture")
+        .unwrap()
+        .set_ignore_cursor_events(true)
+        .unwrap();
+    storage
+        .ffmpeg_child
+        .lock()
+        .unwrap()
+        .replace(capture::capture(x, y, w, h).unwrap());
 }
+
+// async fn minimize(app_handle: tauri::AppHandle) {
+//     use tauri::GlobalShortcutManager;
+//     app_handle
+//         .global_shortcut_manager()
+//         .register("CTRL + U", move || {});
+// }
+
 fn main() {
+    let tray_menu = SystemTrayMenu::new(); // insert the menu items here
+
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            // let main_window = app.get_window("main").unwrap();
+            // main_window.set_always_on_top(true).unwrap();
+            // main_window.set_decorations(false).unwrap();
+            // main_window
+            //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
+            //     .unwrap();
+            {
+                let handle = app.handle();
+                app.global_shortcut_manager()
+                    .register("ALT + SHIFT + V", move || {
+                        let capture_window = tauri::WindowBuilder::new(
+                            &handle,
+                            "capture",
+                            tauri::WindowUrl::App("/capture".into()),
+                        )
+                        .transparent(true)
+                        .focused(true)
+                        .decorations(false)
+                        .always_on_top(true)
+                        .skip_taskbar(true)
+                        .fullscreen(true)
+                        .resizable(false)
+                        .build()
+                        .unwrap();
+                        // capture_window
+                        //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
+                        //     .unwrap();
+                        // capture::capture().unwrap();
+                    })
+                    .unwrap();
+            }
+            {
+                let handle = app.handle();
+                app.global_shortcut_manager()
+                    .register("ALT + SHIFT + S", move || {
+                        if let Some((mut child, temp_dir)) = handle
+                            .state::<Storage>()
+                            .ffmpeg_child
+                            .lock()
+                            .unwrap()
+                            .take()
+                        {
+                            child.stdin.take().unwrap().write_all(b"q").unwrap();
+                            handle.get_window("capture").unwrap().close().unwrap();
+                        }
+                        // capture_window
+                        //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
+                        //     .unwrap();
+                        // capture::capture().unwrap();
+                    })
+                    .unwrap();
+            }
+
+            Ok(())
+        })
+        .system_tray(SystemTray::new().with_menu(tray_menu))
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::LeftClick {
+                position: _,
+                size: _,
+                ..
+            } => {
+                println!("system tray received a left click");
+            }
+            SystemTrayEvent::RightClick {
+                position: _,
+                size: _,
+                ..
+            } => {
+                println!("system tray received a right click");
+            }
+            SystemTrayEvent::DoubleClick {
+                position: _,
+                size: _,
+                ..
+            } => {
+                println!("system tray received a double click");
+            }
+            SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                "quit" => {
+                    std::process::exit(0);
+                }
+                "hide" => {
+                    let window = app.get_window("main").unwrap();
+                    window.hide().unwrap();
+                }
+                _ => {}
+            },
+            _ => {}
+        })
+        .manage(Storage {
+            ffmpeg_child: Default::default(),
+        })
+        .invoke_handler(tauri::generate_handler![capture])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| match event {
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                api.prevent_exit();
+            }
+            _ => {}
+        });
 }
