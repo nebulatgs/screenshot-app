@@ -16,12 +16,22 @@ tauri-build = { version = "1.2", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.2", features = ["global-shortcut-all", "shell-open", "shell-sidecar", "system-tray"] }
+tauri = { version = "1.2", features = [
+    "global-shortcut-all",
+    "shell-open",
+    "shell-sidecar",
+    "system-tray",
+] }
 tempdir = "0.3.7"
 anyhow = "1.0.66"
 dirs = "4.0.0"
 chrono = "0.4.23"
 enigo = "0.0.14"
+rust-s3 = { version = "0.32.3" }
+tokio = { version = "1.23.0", features = ["full"] }
+rand = "0.8.5"
+hex = "0.4.3"
+clipboard-win = "4.4.2"
 
 [features]
 # by default Tauri runs in production mode

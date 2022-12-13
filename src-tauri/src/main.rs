@@ -3,22 +3,19 @@
     windows_subsystem = "windows"
 )]
 
-use std::{
-    io::Write,
-    process::Child,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Mutex,
-    },
-    thread,
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Mutex,
 };
 
 use anyhow::Context;
+use rand::Rng;
+use s3::{creds::Credentials, Bucket, Region};
 use tauri::{
     api::process::{CommandChild, CommandEvent},
     async_runtime::Receiver,
-    CustomMenuItem, GlobalShortcutManager, Manager, PhysicalPosition, Position, State, SystemTray,
-    SystemTrayEvent, SystemTrayMenu,
+    CustomMenuItem, GlobalShortcutManager, Manager, Position, State, SystemTray, SystemTrayEvent,
+    SystemTrayMenu,
 };
 use tempdir::TempDir;
 
@@ -27,6 +24,8 @@ mod capture;
 struct Storage {
     monitor: AtomicU32,
     ffmpeg_child: Mutex<Option<(Receiver<CommandEvent>, CommandChild, TempDir)>>,
+    bucket: Mutex<Option<Bucket>>,
+    custom_domain: Mutex<Option<String>>,
 }
 
 #[tauri::command]
@@ -59,6 +58,30 @@ fn close_capture(app: tauri::AppHandle) {
         window.close().unwrap();
     }
 }
+
+#[tauri::command]
+fn set_bucket(
+    name: String,
+    region: String,
+    secret: String,
+    access: String,
+    endpoint: String,
+    custom: String,
+    storage: State<Storage>,
+) {
+    println!("set bucket");
+    storage.bucket.lock().unwrap().replace(
+        Bucket::new(
+            &name,
+            Region::Custom { region, endpoint },
+            Credentials::new(Some(&access), Some(&secret), None, None, None).unwrap(),
+        )
+        .context("failed to create bucket")
+        .unwrap(),
+    );
+    Option::replace(&mut storage.custom_domain.lock().unwrap(), custom);
+}
+
 fn main() {
     let tray_menu = SystemTrayMenu::new().add_item(CustomMenuItem::new("quit", "Quit App")); // insert the menu items here
 
@@ -152,9 +175,39 @@ fn main() {
                                     dirs::video_dir()
                                         .unwrap()
                                         .join("Quick Captures")
-                                        .join(filename),
+                                        .join(&filename),
                                 )
                                 .unwrap();
+                                let state = handle.state::<Storage>();
+                                let guard = state.bucket.lock().unwrap().clone();
+                                if guard.is_some() {
+                                    let bucket = guard.unwrap();
+                                    let mut file =
+                                        tokio::fs::File::open(temp_dir.path().join("record.mp4"))
+                                            .await
+                                            .unwrap();
+                                    let random_bytes = rand::thread_rng().gen::<[u8; 12]>();
+                                    let filename = format!("/{}.mp4", &hex::encode(&random_bytes));
+                                    bucket
+                                        .put_object_stream_with_content_type(
+                                            &mut file,
+                                            &filename,
+                                            "video/mp4",
+                                        )
+                                        .await
+                                        .unwrap();
+                                    if state.custom_domain.lock().unwrap().is_some() {
+                                        let url = format!(
+                                            "https://{}{}",
+                                            state.custom_domain.lock().unwrap().as_ref().unwrap(),
+                                            filename
+                                        );
+                                        use clipboard_win::{formats, set_clipboard};
+                                        set_clipboard(formats::Unicode, &url).unwrap();
+
+                                        println!("url: {}", url);
+                                    }
+                                }
                                 temp_dir.close().unwrap();
                             });
                         }
@@ -202,8 +255,10 @@ fn main() {
         .manage(Storage {
             ffmpeg_child: Default::default(),
             monitor: Default::default(),
+            bucket: Default::default(),
+            custom_domain: Default::default(),
         })
-        .invoke_handler(tauri::generate_handler![capture, close_capture])
+        .invoke_handler(tauri::generate_handler![capture, close_capture, set_bucket])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| match event {
