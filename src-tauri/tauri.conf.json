@@ -22,17 +22,19 @@
 			},
 			"shell": {
 				"all": false,
-				"open": true
+				"open": true,
+				"sidecar": true,
+				"scope": [{ "name": "binaries/ffmpeg", "sidecar": true }]
 			}
 		},
 		"bundle": {
+			"externalBin": ["binaries/ffmpeg"],
 			"active": true,
 			"category": "DeveloperTool",
 			"copyright": "",
 			"deb": {
 				"depends": []
 			},
-			"externalBin": [],
 			"icon": [
 				"icons/32x32.png",
 				"icons/128x128.png",

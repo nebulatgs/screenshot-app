@@ -3,10 +3,3 @@
 </script>
 
 <Capture />
-
-<style>
-	html,
-	body {
-		background: transparent;
-	}
-</style>

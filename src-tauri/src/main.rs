@@ -3,19 +3,30 @@
     windows_subsystem = "windows"
 )]
 
-use std::{io::Write, process::Child, sync::Mutex};
+use std::{
+    io::Write,
+    process::Child,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Mutex,
+    },
+    thread,
+};
 
 use anyhow::Context;
 use tauri::{
-    CustomMenuItem, GlobalShortcutManager, Manager, State, SystemTray, SystemTrayEvent,
-    SystemTrayMenu,
+    api::process::{CommandChild, CommandEvent},
+    async_runtime::Receiver,
+    CustomMenuItem, GlobalShortcutManager, Manager, PhysicalPosition, Position, State, SystemTray,
+    SystemTrayEvent, SystemTrayMenu,
 };
 use tempdir::TempDir;
 
 mod capture;
 
 struct Storage {
-    ffmpeg_child: Mutex<Option<(Child, TempDir)>>,
+    monitor: AtomicU32,
+    ffmpeg_child: Mutex<Option<(Receiver<CommandEvent>, CommandChild, TempDir)>>,
 }
 
 #[tauri::command]
@@ -31,7 +42,14 @@ fn capture(x1: u32, y1: u32, x2: u32, y2: u32, storage: State<Storage>, app: tau
     let w = (x2 as f64 * scale) as u32 - (x1 as f64 * scale) as u32;
     let h = (y2 as f64 * scale) as u32 - (y1 as f64 * scale) as u32;
     storage.ffmpeg_child.lock().unwrap().replace(
-        capture::capture((x1 as f64 * scale) as u32, (y1 as f64 * scale) as u32, w, h).unwrap(),
+        capture::capture(
+            (x1 as f64 * scale) as u32,
+            (y1 as f64 * scale) as u32,
+            w,
+            h,
+            storage.monitor.load(Ordering::Relaxed),
+        )
+        .unwrap(),
     );
 }
 
@@ -50,7 +68,7 @@ fn main() {
                 let handle = app.handle();
                 app.global_shortcut_manager()
                     .register("ALT + SHIFT + V", move || {
-                        tauri::WindowBuilder::new(
+                        let window = tauri::WindowBuilder::new(
                             &handle,
                             "capture",
                             tauri::WindowUrl::App("/capture".into()),
@@ -62,8 +80,37 @@ fn main() {
                         .skip_taskbar(true)
                         .fullscreen(true)
                         .resizable(false)
+                        .visible(false)
                         .build()
                         .unwrap();
+                        for (i, monitor) in window.available_monitors().unwrap().iter().enumerate()
+                        {
+                            use enigo::Enigo;
+                            let (x, y) = Enigo::mouse_location();
+                            let monitor_pos = monitor.position();
+                            let monitor_size = monitor.size();
+                            let monitor_x = monitor_pos.x as i32;
+                            let monitor_y = monitor_pos.y as i32;
+                            let monitor_w = monitor_size.width as i32;
+                            let monitor_h = monitor_size.height as i32;
+
+                            // check if mouse is in monitor
+                            if x >= monitor_x
+                                && x <= monitor_x + monitor_w
+                                && y >= monitor_y
+                                && y <= monitor_y + monitor_h
+                            {
+                                window
+                                    .set_position(Position::Physical(*monitor.position()))
+                                    .unwrap();
+                                window.show().unwrap();
+                                handle
+                                    .state::<Storage>()
+                                    .monitor
+                                    .store(i as u32, Ordering::Relaxed);
+                                break;
+                            }
+                        }
                     })
                     .unwrap();
             }
@@ -71,31 +118,45 @@ fn main() {
                 let handle = app.handle();
                 app.global_shortcut_manager()
                     .register("ALT + SHIFT + S", move || {
-                        if let Some((mut child, temp_dir)) = handle
+                        if let Some((mut rx, mut child, temp_dir)) = handle
                             .state::<Storage>()
                             .ffmpeg_child
                             .lock()
                             .unwrap()
                             .take()
                         {
-                            child.stdin.take().unwrap().write_all(b"q").unwrap();
-                            handle.get_window("capture").unwrap().close().unwrap();
-                            child.wait().unwrap();
-                            use chrono::Utc;
-                            let now = Utc::now();
-                            let filename = format!("qc_{}.mp4", now.format("%d-%m-%Y_%H-%M-%S"));
-                            _ = std::fs::create_dir(
-                                dirs::video_dir().unwrap().join("Quick Captures"),
-                            );
-                            std::fs::copy(
-                                temp_dir.path().join("record.mp4"),
-                                dirs::video_dir()
-                                    .unwrap()
-                                    .join("Quick Captures")
-                                    .join(filename),
-                            )
-                            .unwrap();
-                            temp_dir.close().unwrap();
+                            let handle = handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                // Ask ffmpeg to finish recording
+                                child.write(b"q").unwrap();
+
+                                // Hacky way to wait for ffmpeg to exit
+                                while let Some(event) = rx.recv().await {
+                                    if let CommandEvent::Stdout(line) = event {
+                                        if line.contains("muxing overhead") {
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                handle.get_window("capture").unwrap().close().unwrap();
+                                use chrono::Utc;
+                                let now = Utc::now();
+                                let filename =
+                                    format!("qc_{}.mp4", now.format("%d-%m-%Y_%H-%M-%S"));
+                                _ = std::fs::create_dir(
+                                    dirs::video_dir().unwrap().join("Quick Captures"),
+                                );
+                                std::fs::copy(
+                                    temp_dir.path().join("record.mp4"),
+                                    dirs::video_dir()
+                                        .unwrap()
+                                        .join("Quick Captures")
+                                        .join(filename),
+                                )
+                                .unwrap();
+                                temp_dir.close().unwrap();
+                            });
                         }
                         // capture_window
                         //     .set_position(Position::Physical(PhysicalPosition { x: 0, y: 0 }))
@@ -140,6 +201,7 @@ fn main() {
         })
         .manage(Storage {
             ffmpeg_child: Default::default(),
+            monitor: Default::default(),
         })
         .invoke_handler(tauri::generate_handler![capture, close_capture])
         .build(tauri::generate_context!())

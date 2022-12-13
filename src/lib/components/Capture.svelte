@@ -9,8 +9,6 @@
 	let startY = 0;
 	$: width = x - startX;
 	$: height = y - startY;
-	let globalStartX = 0;
-	let globalStartY = 0;
 	let x = 0;
 	let y = 0;
 	let canvasEl: HTMLCanvasElement;
@@ -42,8 +40,6 @@
 		}
 		startX = e.offsetX;
 		startY = e.offsetY;
-		globalStartX = e.screenX;
-		globalStartY = e.screenY;
 		x = startX;
 		y = startY;
 	}}
@@ -67,14 +63,15 @@
 			const ctx = canvasEl.getContext("2d");
 			if (ctx) {
 				ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-				ctx.strokeStyle = "rgba(255, 255, 255, 1)";
+				ctx.strokeStyle = "rgba(255, 0, 0, 1)";
 				ctx.strokeRect(startX - 2, startY - 2, width + 4, height + 4);
+				opacity = 0.8;
 			}
 			invoke("capture", {
-				x1: globalStartX,
-				y1: globalStartY,
-				x2: e.screenX,
-				y2: e.screenY,
+				x1: startX,
+				y1: startY,
+				x2: e.offsetX,
+				y2: e.offsetY,
 			});
 		} else {
 			const ctx = canvasEl.getContext("2d");
