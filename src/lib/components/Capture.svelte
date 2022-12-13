@@ -84,7 +84,7 @@
 />
 
 <canvas
-	class="w-screen h-screen top-0 left-0 absolute grid place-items-center text-white opacity-0 transition-opacity duration-500 select-none"
+	class="w-screen h-screen top-0 left-0 absolute grid place-items-center text-white opacity-0 transition-opacity duration-500 select-none cursor-crosshair"
 	style="opacity: {opacity};"
 	bind:this={canvasEl}
 />
