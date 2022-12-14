@@ -69,10 +69,13 @@
 		"windows": [
 			{
 				"fullscreen": false,
-				"height": 600,
+				"height": 780,
 				"resizable": true,
 				"title": "Quick Capture",
-				"width": 800
+				"transparent": true,
+				"decorations": false,
+				"width": 1215,
+				"center": true
 			}
 		]
 	}

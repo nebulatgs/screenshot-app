@@ -219,6 +219,10 @@ fn main() {
                     .unwrap();
             }
 
+            let main = app.get_window("main").unwrap();
+            window_vibrancy::apply_mica(&main).unwrap();
+            main.set_decorations(true).unwrap();
+
             Ok(())
         })
         .system_tray(SystemTray::new().with_menu(tray_menu))
